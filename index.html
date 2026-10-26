@@ -9,6 +9,7 @@
     :root {
       --primary: #4a90e2;
       --danger: #e74c3c;
+      --secondary: #6c757d;
       --bg: #f4f7f6;
     }
     body {
@@ -26,40 +27,25 @@
       background-color: var(--primary); color: white; border: none; cursor: pointer; font-weight: bold;
     }
     button.danger { background-color: var(--danger); }
+    button.secondary { background-color: var(--secondary); }
     button:hover { opacity: 0.9; }
     button:disabled { background-color: #aaa; cursor: not-allowed; }
 
-    /* 연결 설정 화면 */
-    #setup-screen {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      min-height: 80vh;
-    }
-    .setup-card {
-      background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-      width: 100%; max-width: 400px; text-align: center;
-    }
-    .setup-card input { width: 100%; margin-bottom: 15px; }
-    .setup-card button { width: 100%; padding: 12px; font-size: 1.05rem; }
-
-    /* 메인 앱 화면 */
-    #app-screen { display: none; }
+    /* 헤더 */
     header {
       display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+      flex-wrap: wrap; gap: 10px;
     }
     .header-btns { display: flex; gap: 10px; }
-    
-    /* 모달 */
-    .modal {
-      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100;
+
+    /* 미연결 상태 안내 */
+    #no-connection-msg {
+      text-align: center; padding: 60px 20px; background: white; border-radius: 8px;
+      color: #666; box-shadow: 0 2px 5px rgba(0,0,0,0.05); line-height: 1.6;
     }
-    .modal-content {
-      background: white; padding: 20px; border-radius: 8px; width: 400px; max-width: 90%;
-    }
-    .modal-content input, .modal-content button { width: 100%; margin: 5px 0 15px; }
-    
-    /* 차량 카드 */
-    #vehicle-list { display: grid; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); }
+
+    /* 차량 카드 영역 */
+    #vehicle-list { display: none; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); }
     .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
     .card h2 { margin: 0 0 15px 0; font-size: 1.2rem; }
     .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9rem; margin-bottom: 15px; }
@@ -72,124 +58,204 @@
     .thread-item img { max-width: 100%; border-radius: 4px; margin-top: 5px; }
     .thread-input-group { display: flex; flex-direction: column; gap: 5px; }
     .thread-input-group textarea { resize: vertical; }
+
+    /* 모달 */
+    .modal {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100;
+    }
+    .modal-content {
+      background: white; padding: 20px; border-radius: 8px; width: 400px; max-width: 90%;
+    }
+    .modal-content input, .modal-content button { width: 100%; margin: 5px 0 15px; }
+    .modal-content label { font-size: 0.85rem; font-weight: bold; display: block; margin-top: 5px; }
   </style>
 </head>
 <body>
 
-  <!-- Supabase 연결 설정 화면 -->
-  <div id="setup-screen">
-    <div class="setup-card">
-      <h2 style="margin-top:0;">Supabase 연결</h2>
-      <p style="font-size:0.9rem; color:#666; margin-bottom:20px;">
-        데이터베이스 연동을 위해<br>URL과 Anon Key를 입력해주세요.
+  <header>
+    <h1 style="margin: 0;">차량 관리 시스템</h1>
+    <div class="header-btns">
+      <button class="secondary" onclick="openSettings()">⚙️ 환경설정</button>
+      <button onclick="openAddVehicleModal()">+ 차량 등록</button>
+    </div>
+  </header>
+
+  <!-- 데이터베이스 미연결 안내 화면 -->
+  <div id="no-connection-msg">
+    <h3>데이터베이스가 연결되지 않았습니다.</h3>
+    <p>차량 정보를 불러오고 저장하려면 데이터베이스(Supabase) 연동이 필요합니다.<br>우측 상단의 <b>[⚙️ 환경설정]</b> 버튼을 눌러 연결 정보를 입력해주세요.</p>
+  </div>
+
+  <!-- 차량 목록 화면 -->
+  <div id="vehicle-list"></div>
+
+  <!-- 1. 환경설정 모달 -->
+  <div id="settingsModal" class="modal">
+    <div class="modal-content">
+      <h3 style="margin-top:0;">⚙️ 데이터베이스 연결 설정</h3>
+      <p style="font-size:0.8rem; color:#666; margin-bottom:20px;">
+        사용하시는 Supabase 프로젝트의 연결 정보를 입력해주세요.<br>정보는 현재 사용 중인 브라우저에만 안전하게 저장됩니다.
       </p>
-      <input type="text" id="configUrl" placeholder="Supabase Project URL" autocomplete="off">
-      <input type="password" id="configKey" placeholder="Supabase Anon Key" autocomplete="off">
-      <button id="connectBtn" onclick="connectSupabase()">연결하기</button>
+      
+      <label>데이터베이스 주소 (URL)</label>
+      <input type="text" id="configUrl" placeholder="예: https://xxxxxx.supabase.co" autocomplete="off">
+      
+      <label>보안 인증 키 (Anon Key)</label>
+      <input type="password" id="configKey" placeholder="긴 영문과 숫자 조합의 키 입력" autocomplete="off">
+      
+      <button id="connectBtn" onclick="connectSupabase()">연결 및 저장</button>
+      <div style="display: flex; gap: 10px; margin-top: -5px;">
+        <button class="danger" style="margin-bottom: 0;" onclick="disconnectSupabase()">연결 해제</button>
+        <button class="secondary" style="margin-bottom: 0;" onclick="closeModal('settingsModal')">닫기</button>
+      </div>
     </div>
   </div>
 
-  <!-- 메인 관리 화면 -->
-  <div id="app-screen">
-    <header>
-      <h1>차량 관리 시스템</h1>
-      <div class="header-btns">
-        <button onclick="openModal('addVehicleModal')">+ 차량 등록</button>
-        <button class="danger" onclick="disconnectSupabase()">연결 해제</button>
-      </div>
-    </header>
-
-    <div id="vehicle-list"></div>
+  <!-- 2. 신규 차량 등록 모달 -->
+  <div id="addVehicleModal" class="modal">
+    <div class="modal-content">
+      <h3 style="margin-top:0;">신규 차량 등록</h3>
+      <label>차량번호</label>
+      <input type="text" id="vPlate" placeholder="예: 12가 3456" required>
+      <label>차종</label>
+      <input type="text" id="vModel" placeholder="예: 아반떼, i30 등" required>
+      <label>연식</label>
+      <input type="text" id="vYear" placeholder="예: 2010" required>
+      <label>색상</label>
+      <input type="text" id="vColor" placeholder="예: 쥐색, 흰색" required>
+      <label>보험사</label>
+      <input type="text" id="vInsuranceCo" placeholder="예: 삼성화재">
+      <label>보험 만기일자</label>
+      <input type="date" id="vInsuranceExp" required>
+      <label>자동차검사 유효기간</label>
+      <input type="date" id="vInspectionExp" required>
+      
+      <button onclick="addVehicle()">등록하기</button>
+      <button class="danger" style="margin-bottom: 0;" onclick="closeModal('addVehicleModal')">취소</button>
+    </div>
   </div>
 
-  <!-- 10일 전 D-Day 알림 팝업 -->
+  <!-- 3. 만기 임박 알림 모달 -->
   <div id="dDayAlertModal" class="modal">
     <div class="modal-content" style="border-left: 5px solid var(--danger);">
       <h3 style="margin-top:0;">⚠️ 만기 임박 알림</h3>
       <div id="alertMessages" style="margin-bottom: 15px; line-height: 1.5;"></div>
-      <button class="danger" onclick="closeModal('dDayAlertModal')">확인</button>
-    </div>
-  </div>
-
-  <!-- 차량 등록 모달 -->
-  <div id="addVehicleModal" class="modal">
-    <div class="modal-content">
-      <h3 style="margin-top:0;">신규 차량 등록</h3>
-      <input type="text" id="vPlate" placeholder="차량번호 (예: 12가 3456)" required>
-      <input type="text" id="vModel" placeholder="차종" required>
-      <input type="text" id="vYear" placeholder="연식" required>
-      <input type="text" id="vColor" placeholder="색상" required>
-      <label style="font-size:0.8rem; display:block;">보험사</label>
-      <input type="text" id="vInsuranceCo" placeholder="보험사명">
-      <label style="font-size:0.8rem; display:block;">보험 만기일자</label>
-      <input type="date" id="vInsuranceExp" required>
-      <label style="font-size:0.8rem; display:block;">자동차검사 유효기간</label>
-      <input type="date" id="vInspectionExp" required>
-      
-      <button onclick="addVehicle()">등록하기</button>
-      <button class="danger" onclick="closeModal('addVehicleModal')">취소</button>
+      <button class="danger" style="margin-bottom: 0;" onclick="closeModal('dDayAlertModal')">확인</button>
     </div>
   </div>
 
   <script>
-    let supabase = null; // 전역 Supabase 클라이언트
+    let supabase = null;
 
+    // 페이지 로드 시 기존 키 확인
     document.addEventListener("DOMContentLoaded", () => {
-      // 저장된 키가 있는지 확인
       const savedUrl = localStorage.getItem('supaUrl');
       const savedKey = localStorage.getItem('supaKey');
       
       if (savedUrl && savedKey) {
-        initSupabase(savedUrl, savedKey);
+        initSupabase(savedUrl, savedKey, false); // false: 조용히 연결 시도
       }
     });
 
-    // 1. Supabase 연결 초기화
-    function connectSupabase() {
+    // 환경설정 창 열기
+    function openSettings() {
+      document.getElementById('configUrl').value = localStorage.getItem('supaUrl') || '';
+      document.getElementById('configKey').value = localStorage.getItem('supaKey') || '';
+      openModal('settingsModal');
+    }
+
+    // 모달 제어 함수
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    
+    // 차량 등록 창 열기 (DB 미연결 방지)
+    function openAddVehicleModal() {
+      if (!supabase) return alert('먼저 [⚙️ 환경설정]에서 데이터베이스를 연결해주세요.');
+      openModal('addVehicleModal');
+    }
+
+    // Supabase 수동 연결 시도 (버튼 클릭)
+    async function connectSupabase() {
       const url = document.getElementById('configUrl').value.trim();
       const key = document.getElementById('configKey').value.trim();
       
-      if (!url || !key) return alert('Supabase URL과 Key를 모두 입력해주세요.');
+      if (!url || !key) return alert('데이터베이스 주소와 인증 키를 모두 입력해주세요.');
+      if (!url.startsWith('http')) return alert('주소는 https:// 로 시작해야 합니다.');
+
+      const btn = document.getElementById('connectBtn');
+      btn.innerText = '연결 확인 중...';
+      btn.disabled = true;
       
-      initSupabase(url, key);
+      await initSupabase(url, key, true); // true: 성공/실패 시 알림창 띄움
+      
+      btn.innerText = '연결 및 저장';
+      btn.disabled = false;
     }
 
-    function initSupabase(url, key) {
+    // Supabase 실제 연결 로직
+    async function initSupabase(url, key, showAlert) {
       try {
-        supabase = window.supabase.createClient(url, key);
+        const tempClient = window.supabase.createClient(url, key);
         
-        // 키 저장 후 화면 전환
+        // 연결 검증: 테이블이 있는지 1개만 불러와보기
+        const { error } = await tempClient.from('vehicles').select('id').limit(1);
+        if (error) throw error; 
+
+        // 검증 성공
+        supabase = tempClient;
         localStorage.setItem('supaUrl', url);
         localStorage.setItem('supaKey', key);
         
-        document.getElementById('setup-screen').style.display = 'none';
-        document.getElementById('app-screen').style.display = 'block';
+        // UI 변경 (안내문 숨기고 리스트 표시)
+        document.getElementById('no-connection-msg').style.display = 'none';
+        document.getElementById('vehicle-list').style.display = 'grid';
         
-        loadVehicles(); // 데이터 불러오기 시도
+        closeModal('settingsModal');
+        if (showAlert) alert('성공적으로 연결되었습니다!');
+        
+        loadVehicles(); 
       } catch (err) {
-        alert('잘못된 형식의 URL 또는 키입니다.');
-        disconnectSupabase();
+        console.error("연결 에러:", err);
+        supabase = null; // 연결 실패 시 초기화
+        let errorMsg = err.message || "알 수 없는 오류";
+        
+        if (showAlert) {
+          if (errorMsg.includes('does not exist')) {
+            alert(`연결 실패: 데이터베이스에 차량 테이블이 없습니다.\nSupabase SQL Editor에서 테이블을 먼저 생성해주세요.`);
+          } else if (errorMsg.includes('Failed to fetch') || errorMsg.includes('URL')) {
+            alert(`연결 실패: 잘못된 데이터베이스 주소입니다.`);
+          } else if (errorMsg.includes('JWT')) {
+            alert(`연결 실패: 인증 키가 잘못되었습니다.`);
+          } else {
+            alert(`연결 실패:\n${errorMsg}`);
+          }
+        }
+        showNoConnectionUI();
       }
     }
 
-    // 2. 연결 해제 및 키 삭제
+    // 연결 해제
     function disconnectSupabase() {
+      if(!localStorage.getItem('supaUrl')) return alert('연결된 데이터베이스가 없습니다.');
+      if(!confirm('연결을 해제하시겠습니까? 데이터는 삭제되지 않습니다.')) return;
+
       localStorage.removeItem('supaUrl');
       localStorage.removeItem('supaKey');
       supabase = null;
       
-      document.getElementById('configUrl').value = '';
-      document.getElementById('configKey').value = '';
-      
-      document.getElementById('app-screen').style.display = 'none';
-      document.getElementById('setup-screen').style.display = 'flex';
+      closeModal('settingsModal');
+      showNoConnectionUI();
+      alert('연결이 해제되었습니다.');
     }
 
-    // UI 모달 컨트롤
-    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
-    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    function showNoConnectionUI() {
+      document.getElementById('no-connection-msg').style.display = 'block';
+      document.getElementById('vehicle-list').style.display = 'none';
+      document.getElementById('vehicle-list').innerHTML = '';
+    }
 
-    // D-Day 계산 로직
+    // D-Day 계산 및 포맷
     function getDDay(dateString) {
       if (!dateString) return null;
       const targetDate = new Date(dateString);
@@ -207,64 +273,59 @@
 
     // 차량 목록 불러오기
     async function loadVehicles() {
-      try {
-        const { data: vehicles, error } = await supabase.from('vehicles').select('*').order('created_at', { ascending: false });
-        
-        // 테이블이 없거나 키가 잘못된 경우의 에러 처리
-        if (error) throw error;
+      if (!supabase) return;
+      const { data: vehicles, error } = await supabase.from('vehicles').select('*').order('created_at', { ascending: false });
+      if (error) return alert('차량 정보를 불러오는 중 오류가 발생했습니다.');
 
-        const listDiv = document.getElementById('vehicle-list');
-        listDiv.innerHTML = '';
-        let alerts = [];
+      const listDiv = document.getElementById('vehicle-list');
+      listDiv.innerHTML = '';
+      let alerts = [];
 
-        for (const v of vehicles) {
-          const insDDay = getDDay(v.insurance_exp);
-          const inspDDay = getDDay(v.inspection_exp);
+      for (const v of vehicles) {
+        const insDDay = getDDay(v.insurance_exp);
+        const inspDDay = getDDay(v.inspection_exp);
 
-          if (insDDay !== null && insDDay >= 0 && insDDay <= 10) alerts.push(`${v.plate} (${v.model})의 <b>보험 만기</b>가 ${insDDay === 0 ? '오늘입니다' : insDDay + '일 남았습니다'}.`);
-          if (inspDDay !== null && inspDDay >= 0 && inspDDay <= 10) alerts.push(`${v.plate} (${v.model})의 <b>자동차검사 기한</b>이 ${inspDDay === 0 ? '오늘입니다' : inspDDay + '일 남았습니다'}.`);
+        if (insDDay !== null && insDDay >= 0 && insDDay <= 10) alerts.push(`${v.plate} (${v.model})의 <b>보험 만기</b>가 ${insDDay === 0 ? '오늘입니다' : insDDay + '일 남았습니다'}.`);
+        if (inspDDay !== null && inspDDay >= 0 && inspDDay <= 10) alerts.push(`${v.plate} (${v.model})의 <b>자동차검사 기한</b>이 ${inspDDay === 0 ? '오늘입니다' : inspDDay + '일 남았습니다'}.`);
 
-          const insClass = (insDDay !== null && insDDay <= 10) ? 'd-day-alert' : '';
-          const inspClass = (inspDDay !== null && inspDDay <= 10) ? 'd-day-alert' : '';
+        const insClass = (insDDay !== null && insDDay <= 10) ? 'd-day-alert' : '';
+        const inspClass = (inspDDay !== null && inspDDay <= 10) ? 'd-day-alert' : '';
 
-          const card = document.createElement('div');
-          card.className = 'card';
-          card.innerHTML = `
-            <h2>${v.plate} <span style="font-size:0.9rem; color:#666;">(${v.model} / ${v.year} / ${v.color})</span></h2>
-            <div class="info-grid">
-              <div><strong>보험사:</strong> ${v.insurance_co || '-'}</div>
-              <div><strong>보험 만기:</strong> <span class="${insClass}">${v.insurance_exp || '-'} (${formatDDay(insDDay)})</span></div>
-              <div style="grid-column: 1 / -1;"><strong>자동차검사:</strong> <span class="${inspClass}">${v.inspection_exp || '-'} (${formatDDay(inspDDay)})</span></div>
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <h2>${v.plate} <span style="font-size:0.9rem; color:#666;">(${v.model} / ${v.year} / ${v.color})</span></h2>
+          <div class="info-grid">
+            <div><strong>보험사:</strong> ${v.insurance_co || '-'}</div>
+            <div><strong>보험 만기:</strong> <span class="${insClass}">${v.insurance_exp || '-'} (${formatDDay(insDDay)})</span></div>
+            <div style="grid-column: 1 / -1;"><strong>자동차검사:</strong> <span class="${inspClass}">${v.inspection_exp || '-'} (${formatDDay(inspDDay)})</span></div>
+          </div>
+          
+          <div class="thread-section">
+            <strong>특이사항 이력</strong>
+            <div id="threads-${v.id}" class="thread-list">로딩중...</div>
+            <div class="thread-input-group">
+              <textarea id="note-text-${v.id}" rows="2" placeholder="정비 내역 등을 기록하세요..."></textarea>
+              <input type="file" id="note-file-${v.id}" accept="image/*">
+              <button onclick="addNote('${v.id}')">기록 저장</button>
             </div>
-            
-            <div class="thread-section">
-              <strong>특이사항 이력</strong>
-              <div id="threads-${v.id}" class="thread-list">로딩중...</div>
-              <div class="thread-input-group">
-                <textarea id="note-text-${v.id}" rows="2" placeholder="정비 내역 등을 기록하세요..."></textarea>
-                <input type="file" id="note-file-${v.id}" accept="image/*">
-                <button onclick="addNote('${v.id}')">기록 저장</button>
-              </div>
-            </div>
-            <button class="danger" style="width:100%; margin-top:15px;" onclick="deleteVehicle('${v.id}')">매각/삭제 처리</button>
-          `;
-          listDiv.appendChild(card);
-          loadNotes(v.id);
-        }
+          </div>
+          <button class="danger" style="width:100%; margin-top:15px;" onclick="deleteVehicle('${v.id}')">매각/삭제 처리</button>
+        `;
+        listDiv.appendChild(card);
+        loadNotes(v.id);
+      }
 
-        if (alerts.length > 0) {
-          document.getElementById('alertMessages').innerHTML = alerts.join('<br><br>');
-          openModal('dDayAlertModal');
-        }
-      } catch (err) {
-        console.error(err);
-        alert('데이터베이스 연결 실패. URL/Key가 정확한지, 혹은 DB 테이블이 생성되었는지 확인해주세요.');
-        disconnectSupabase();
+      if (alerts.length > 0) {
+        document.getElementById('alertMessages').innerHTML = alerts.join('<br><br>');
+        openModal('dDayAlertModal');
       }
     }
 
     // 차량 등록
     async function addVehicle() {
+      if (!supabase) return alert('데이터베이스가 연결되어 있지 않습니다.');
+
       const v = {
         plate: document.getElementById('vPlate').value,
         model: document.getElementById('vModel').value,
@@ -278,8 +339,9 @@
       if(!v.plate || !v.model) return alert('차량번호와 차종은 필수입니다.');
 
       const { error } = await supabase.from('vehicles').insert([v]);
-      if (error) alert('등록 실패! 콘솔을 확인해주세요.');
-      else {
+      if (error) {
+        alert('등록 실패! 콘솔을 확인해주세요.');
+      } else {
         closeModal('addVehicleModal');
         document.querySelectorAll('#addVehicleModal input').forEach(el => el.value = '');
         loadVehicles();
@@ -288,13 +350,16 @@
 
     // 차량 삭제
     async function deleteVehicle(id) {
+      if (!supabase) return;
       if (!confirm('차량 정보를 삭제하시겠습니까? 관련된 특이사항 스레드도 모두 삭제됩니다.')) return;
+      
       const { error } = await supabase.from('vehicles').delete().eq('id', id);
       if (!error) loadVehicles();
     }
 
     // 스레드 불러오기
     async function loadNotes(vehicleId) {
+      if (!supabase) return;
       const { data: notes, error } = await supabase.from('vehicle_notes').select('*').eq('vehicle_id', vehicleId).order('created_at', { ascending: true });
       const container = document.getElementById(`threads-${vehicleId}`);
       if (error) { container.innerHTML = '불러오기 실패'; return; }
@@ -316,6 +381,7 @@
 
     // 스레드 추가 및 이미지 업로드
     async function addNote(vehicleId) {
+      if (!supabase) return;
       const content = document.getElementById(`note-text-${vehicleId}`).value;
       const fileInput = document.getElementById(`note-file-${vehicleId}`);
       const file = fileInput.files[0];
@@ -333,7 +399,7 @@
         const filePath = `notes/${fileName}`;
 
         const { data: uploadData, error: uploadError } = await supabase.storage.from('vehicle-images').upload(filePath, file);
-        if (uploadError) { alert('이미지 업로드 실패. Storage 버킷 설정 및 권한을 확인하세요.'); btn.innerText = '기록 저장'; btn.disabled = false; return; }
+        if (uploadError) { alert('이미지 업로드 실패. 버킷 권한을 확인하세요.'); btn.innerText = '기록 저장'; btn.disabled = false; return; }
         
         const { data: publicUrlData } = supabase.storage.from('vehicle-images').getPublicUrl(filePath);
         imageUrl = publicUrlData.publicUrl;
