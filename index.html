@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>차량 관리 시스템</title>
-  <!-- Supabase 라이브러리 -->
+  <!-- Supabase 라이브러리 불러오기 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
@@ -134,8 +134,8 @@
   </div>
 
   <script>
-    // 💡 중복 복사 오류를 방지하기 위해 var 선언으로 변경했습니다.
-    var supabase = null;
+    // 💡 변수 이름을 라이브러리(supabase)와 충돌하지 않도록 supabaseClient로 변경했습니다.
+    let supabaseClient = null;
 
     document.addEventListener("DOMContentLoaded", () => {
       const savedUrl = localStorage.getItem('supaUrl');
@@ -155,7 +155,7 @@
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
     
     function openAddVehicleModal() {
-      if (!supabase) return alert('먼저 [⚙️ 환경설정]에서 데이터베이스를 연결해주세요.');
+      if (!supabaseClient) return alert('먼저 [⚙️ 환경설정]에서 데이터베이스를 연결해주세요.');
       openModal('addVehicleModal');
     }
 
@@ -178,15 +178,16 @@
 
     async function initSupabase(url, key, showAlert) {
       try {
-        if (typeof window.supabase === 'undefined') {
+        if (!window.supabase) {
           throw new Error('Supabase 라이브러리를 불러오지 못했습니다. 인터넷 연결 상태를 확인하세요.');
         }
 
+        // 라이브러리의 createClient 기능 사용
         const tempClient = window.supabase.createClient(url, key);
         const { error } = await tempClient.from('vehicles').select('id').limit(1);
         if (error) throw error; 
 
-        supabase = tempClient;
+        supabaseClient = tempClient; // 에러 없이 검증되면 저장
         localStorage.setItem('supaUrl', url);
         localStorage.setItem('supaKey', key);
         
@@ -199,7 +200,7 @@
         loadVehicles(); 
       } catch (err) {
         console.error("연결 에러:", err);
-        supabase = null;
+        supabaseClient = null;
         let errorMsg = err.message || "알 수 없는 오류";
         
         if (showAlert) {
@@ -223,7 +224,7 @@
 
       localStorage.removeItem('supaUrl');
       localStorage.removeItem('supaKey');
-      supabase = null;
+      supabaseClient = null;
       
       closeModal('settingsModal');
       showNoConnectionUI();
@@ -252,8 +253,8 @@
     }
 
     async function loadVehicles() {
-      if (!supabase) return;
-      const { data: vehicles, error } = await supabase.from('vehicles').select('*').order('created_at', { ascending: false });
+      if (!supabaseClient) return;
+      const { data: vehicles, error } = await supabaseClient.from('vehicles').select('*').order('created_at', { ascending: false });
       if (error) return alert('차량 정보를 불러오는 중 오류가 발생했습니다.');
 
       const listDiv = document.getElementById('vehicle-list');
@@ -301,7 +302,7 @@
     }
 
     async function addVehicle() {
-      if (!supabase) return alert('데이터베이스가 연결되어 있지 않습니다.');
+      if (!supabaseClient) return alert('데이터베이스가 연결되어 있지 않습니다.');
       
       const v = {
         plate: document.getElementById('vPlate').value,
@@ -315,7 +316,7 @@
       
       if(!v.plate || !v.model) return alert('차량번호와 차종은 필수입니다.');
 
-      const { error } = await supabase.from('vehicles').insert([v]);
+      const { error } = await supabaseClient.from('vehicles').insert([v]);
       if (error) {
         alert('등록 실패! 콘솔을 확인해주세요.');
       } else {
@@ -326,16 +327,16 @@
     }
 
     async function deleteVehicle(id) {
-      if (!supabase) return;
+      if (!supabaseClient) return;
       if (!confirm('차량 정보를 삭제하시겠습니까? 관련된 특이사항 스레드도 모두 삭제됩니다.')) return;
       
-      const { error } = await supabase.from('vehicles').delete().eq('id', id);
+      const { error } = await supabaseClient.from('vehicles').delete().eq('id', id);
       if (!error) loadVehicles();
     }
 
     async function loadNotes(vehicleId) {
-      if (!supabase) return;
-      const { data: notes, error } = await supabase.from('vehicle_notes').select('*').eq('vehicle_id', vehicleId).order('created_at', { ascending: true });
+      if (!supabaseClient) return;
+      const { data: notes, error } = await supabaseClient.from('vehicle_notes').select('*').eq('vehicle_id', vehicleId).order('created_at', { ascending: true });
       const container = document.getElementById(`threads-${vehicleId}`);
       if (error) { container.innerHTML = '불러오기 실패'; return; }
       
@@ -355,7 +356,7 @@
     }
 
     async function addNote(event, vehicleId) {
-      if (!supabase) return;
+      if (!supabaseClient) return;
       const content = document.getElementById(`note-text-${vehicleId}`).value;
       const fileInput = document.getElementById(`note-file-${vehicleId}`);
       const file = fileInput.files[0];
@@ -372,7 +373,7 @@
         const fileName = `${Math.random()}.${fileExt}`;
         const filePath = `notes/${fileName}`;
 
-        const { data: uploadData, error: uploadError } = await supabase.storage.from('vehicle-images').upload(filePath, file);
+        const { data: uploadData, error: uploadError } = await supabaseClient.storage.from('vehicle-images').upload(filePath, file);
         if (uploadError) { 
           alert('이미지 업로드 실패. 버킷 권한(Public)을 확인하세요.'); 
           btn.innerText = '기록 저장'; 
@@ -380,11 +381,11 @@
           return; 
         }
         
-        const { data: publicUrlData } = supabase.storage.from('vehicle-images').getPublicUrl(filePath);
+        const { data: publicUrlData } = supabaseClient.storage.from('vehicle-images').getPublicUrl(filePath);
         imageUrl = publicUrlData.publicUrl;
       }
 
-      const { error } = await supabase.from('vehicle_notes').insert([{ vehicle_id: vehicleId, content: content, image_url: imageUrl }]);
+      const { error } = await supabaseClient.from('vehicle_notes').insert([{ vehicle_id: vehicleId, content: content, image_url: imageUrl }]);
       
       btn.innerText = '기록 저장';
       btn.disabled = false;
