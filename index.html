@@ -134,8 +134,8 @@
   </div>
 
   <script>
-    // 💡 전역 변수 선언 (딱 한 번만 선언되어야 함)
-    let supabase = null;
+    // 💡 중복 복사 오류를 방지하기 위해 var 선언으로 변경했습니다.
+    var supabase = null;
 
     document.addEventListener("DOMContentLoaded", () => {
       const savedUrl = localStorage.getItem('supaUrl');
