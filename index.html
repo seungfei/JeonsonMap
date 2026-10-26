@@ -4,151 +4,352 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>차량 관리 시스템</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-slate-100 p-8 min-h-screen">
-
-  <!-- 메인 차량 관리 화면 -->
-  <div class="max-w-6xl mx-auto bg-white p-8 rounded-lg shadow-md">
-    <div class="flex justify-between items-center mb-6 border-b pb-4">
-      <h2 class="text-2xl font-bold text-slate-800">차량 정보 관리 시스템</h2>
-      <span class="text-sm text-slate-500">인증 없이 누구나 접근 가능</span>
-    </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --primary: #4a90e2;
+      --danger: #e74c3c;
+      --bg: #f4f7f6;
+    }
+    body {
+      font-family: 'Pretendard', -apple-system, sans-serif;
+      background-color: var(--bg);
+      margin: 0; padding: 20px;
+    }
     
-    <!-- 차량 등록 폼 -->
-    <div class="grid grid-cols-6 gap-4 mb-8 bg-slate-50 p-6 rounded-lg border">
-      <input type="text" id="v-num" placeholder="차량번호 (예: 12가 3456)" class="p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
-      <input type="text" id="v-type" placeholder="차종 (예: 모닝)" class="p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
-      <input type="text" id="v-year" placeholder="연식 (예: 2022)" class="p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
-      <input type="text" id="v-vin" placeholder="차대번호" class="p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
-      <div class="flex flex-col justify-center">
-        <span class="text-xs text-slate-500 mb-1">보험 만기일</span>
-        <input type="date" id="v-date" class="p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
-      </div>
-      <button id="add-btn" class="bg-blue-600 text-white font-bold p-2 rounded hover:bg-blue-700 transition">차량 등록하기</button>
-    </div>
+    /* 입력 및 버튼 공통 */
+    input, button, textarea {
+      padding: 10px; border: 1px solid #ddd; border-radius: 5px;
+      box-sizing: border-box; font-family: inherit;
+    }
+    button {
+      background-color: var(--primary); color: white; border: none; cursor: pointer; font-weight: bold;
+    }
+    button.danger { background-color: var(--danger); }
+    button:hover { opacity: 0.9; }
+    button:disabled { background-color: #aaa; cursor: not-allowed; }
 
-    <!-- 차량 목록 테이블 -->
-    <div class="overflow-x-auto">
-      <table class="w-full text-left border-collapse">
-        <thead>
-          <tr class="bg-slate-200 text-slate-700">
-            <th class="p-3 border font-semibold w-32">차량번호</th>
-            <th class="p-3 border font-semibold w-24">차종</th>
-            <th class="p-3 border font-semibold w-20">연식</th>
-            <th class="p-3 border font-semibold w-40">차대번호</th>
-            <th class="p-3 border font-semibold w-32">보험만기일</th>
-            <th class="p-3 border font-semibold">특이사항 <span class="text-xs text-blue-600 font-normal">(클릭하여 바로 수정 후 엔터)</span></th>
-            <th class="p-3 border font-semibold w-20 text-center">관리</th>
-          </tr>
-        </thead>
-        <tbody id="vehicle-list">
-          <!-- Firebase 데이터가 여기에 들어갑니다 -->
-          <tr><td colspan="7" class="text-center p-8 text-slate-500">데이터를 불러오는 중입니다...</td></tr>
-        </tbody>
-      </table>
+    /* 연결 설정 화면 */
+    #setup-screen {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 80vh;
+    }
+    .setup-card {
+      background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      width: 100%; max-width: 400px; text-align: center;
+    }
+    .setup-card input { width: 100%; margin-bottom: 15px; }
+    .setup-card button { width: 100%; padding: 12px; font-size: 1.05rem; }
+
+    /* 메인 앱 화면 */
+    #app-screen { display: none; }
+    header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+    }
+    .header-btns { display: flex; gap: 10px; }
+    
+    /* 모달 */
+    .modal {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100;
+    }
+    .modal-content {
+      background: white; padding: 20px; border-radius: 8px; width: 400px; max-width: 90%;
+    }
+    .modal-content input, .modal-content button { width: 100%; margin: 5px 0 15px; }
+    
+    /* 차량 카드 */
+    #vehicle-list { display: grid; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); }
+    .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .card h2 { margin: 0 0 15px 0; font-size: 1.2rem; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9rem; margin-bottom: 15px; }
+    .d-day-alert { color: var(--danger); font-weight: bold; }
+    
+    /* 스레드 (특이사항) */
+    .thread-section { border-top: 1px solid #eee; padding-top: 15px; margin-top: 15px; }
+    .thread-list { max-height: 250px; overflow-y: auto; margin-bottom: 10px; }
+    .thread-item { background: #f9f9f9; padding: 10px; border-radius: 5px; margin-bottom: 10px; font-size: 0.85rem; }
+    .thread-item img { max-width: 100%; border-radius: 4px; margin-top: 5px; }
+    .thread-input-group { display: flex; flex-direction: column; gap: 5px; }
+    .thread-input-group textarea { resize: vertical; }
+  </style>
+</head>
+<body>
+
+  <!-- Supabase 연결 설정 화면 -->
+  <div id="setup-screen">
+    <div class="setup-card">
+      <h2 style="margin-top:0;">Supabase 연결</h2>
+      <p style="font-size:0.9rem; color:#666; margin-bottom:20px;">
+        데이터베이스 연동을 위해<br>URL과 Anon Key를 입력해주세요.
+      </p>
+      <input type="text" id="configUrl" placeholder="Supabase Project URL" autocomplete="off">
+      <input type="password" id="configKey" placeholder="Supabase Anon Key" autocomplete="off">
+      <button id="connectBtn" onclick="connectSupabase()">연결하기</button>
     </div>
   </div>
 
-  <!-- Firebase 기능 불러오기 -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  <!-- 메인 관리 화면 -->
+  <div id="app-screen">
+    <header>
+      <h1>차량 관리 시스템</h1>
+      <div class="header-btns">
+        <button onclick="openModal('addVehicleModal')">+ 차량 등록</button>
+        <button class="danger" onclick="disconnectSupabase()">연결 해제</button>
+      </div>
+    </header>
 
-    // ★ 여기에 본인의 Firebase 프로젝트 설정값을 넣으세요!
-    const firebaseConfig = {
-      apiKey: "AIzaSyA2RcIwM9sePcIXwELCw9QloJtIRRg58Yo",
-      authDomain: "OSONGCAR.firebaseapp.com",
-      projectId: "OSONGCAR",
-      storageBucket: "OSONGCAR.appspot.com",
-      messagingSenderId: "OSONGCAR",
-      appId: "OSONGCAR"
-    };
+    <div id="vehicle-list"></div>
+  </div>
 
-    // Firebase 초기화 (인증 기능인 Auth는 삭제했습니다)
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+  <!-- 10일 전 D-Day 알림 팝업 -->
+  <div id="dDayAlertModal" class="modal">
+    <div class="modal-content" style="border-left: 5px solid var(--danger);">
+      <h3 style="margin-top:0;">⚠️ 만기 임박 알림</h3>
+      <div id="alertMessages" style="margin-bottom: 15px; line-height: 1.5;"></div>
+      <button class="danger" onclick="closeModal('dDayAlertModal')">확인</button>
+    </div>
+  </div>
 
-    // 페이지가 열리자마자 바로 차량 목록을 불러옵니다
-    loadVehicles();
-
-    // 차량 등록 기능
-    document.getElementById('add-btn').onclick = async () => {
-      const vNum = document.getElementById('v-num').value;
-      if(!vNum) return alert('차량번호는 필수 입력입니다.');
-
-      document.getElementById('add-btn').innerText = '등록 중...';
+  <!-- 차량 등록 모달 -->
+  <div id="addVehicleModal" class="modal">
+    <div class="modal-content">
+      <h3 style="margin-top:0;">신규 차량 등록</h3>
+      <input type="text" id="vPlate" placeholder="차량번호 (예: 12가 3456)" required>
+      <input type="text" id="vModel" placeholder="차종" required>
+      <input type="text" id="vYear" placeholder="연식" required>
+      <input type="text" id="vColor" placeholder="색상" required>
+      <label style="font-size:0.8rem; display:block;">보험사</label>
+      <input type="text" id="vInsuranceCo" placeholder="보험사명">
+      <label style="font-size:0.8rem; display:block;">보험 만기일자</label>
+      <input type="date" id="vInsuranceExp" required>
+      <label style="font-size:0.8rem; display:block;">자동차검사 유효기간</label>
+      <input type="date" id="vInspectionExp" required>
       
-      await addDoc(collection(db, 'vehicles'), {
-        number: vNum,
-        type: document.getElementById('v-type').value,
-        year: document.getElementById('v-year').value,
-        vin: document.getElementById('v-vin').value,
-        insuranceDate: document.getElementById('v-date').value,
-        note: "" // 특이사항은 처음엔 빈칸
-      });
+      <button onclick="addVehicle()">등록하기</button>
+      <button class="danger" onclick="closeModal('addVehicleModal')">취소</button>
+    </div>
+  </div>
 
-      // 입력창 초기화
-      document.querySelectorAll('input').forEach(input => input.value = '');
-      document.getElementById('add-btn').innerText = '차량 등록하기';
+  <script>
+    let supabase = null; // 전역 Supabase 클라이언트
+
+    document.addEventListener("DOMContentLoaded", () => {
+      // 저장된 키가 있는지 확인
+      const savedUrl = localStorage.getItem('supaUrl');
+      const savedKey = localStorage.getItem('supaKey');
       
-      loadVehicles(); // 등록 후 목록 다시 불러오기
-    };
+      if (savedUrl && savedKey) {
+        initSupabase(savedUrl, savedKey);
+      }
+    });
 
-    // 차량 목록 불러오기 및 그리기 기능
+    // 1. Supabase 연결 초기화
+    function connectSupabase() {
+      const url = document.getElementById('configUrl').value.trim();
+      const key = document.getElementById('configKey').value.trim();
+      
+      if (!url || !key) return alert('Supabase URL과 Key를 모두 입력해주세요.');
+      
+      initSupabase(url, key);
+    }
+
+    function initSupabase(url, key) {
+      try {
+        supabase = window.supabase.createClient(url, key);
+        
+        // 키 저장 후 화면 전환
+        localStorage.setItem('supaUrl', url);
+        localStorage.setItem('supaKey', key);
+        
+        document.getElementById('setup-screen').style.display = 'none';
+        document.getElementById('app-screen').style.display = 'block';
+        
+        loadVehicles(); // 데이터 불러오기 시도
+      } catch (err) {
+        alert('잘못된 형식의 URL 또는 키입니다.');
+        disconnectSupabase();
+      }
+    }
+
+    // 2. 연결 해제 및 키 삭제
+    function disconnectSupabase() {
+      localStorage.removeItem('supaUrl');
+      localStorage.removeItem('supaKey');
+      supabase = null;
+      
+      document.getElementById('configUrl').value = '';
+      document.getElementById('configKey').value = '';
+      
+      document.getElementById('app-screen').style.display = 'none';
+      document.getElementById('setup-screen').style.display = 'flex';
+    }
+
+    // UI 모달 컨트롤
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    // D-Day 계산 로직
+    function getDDay(dateString) {
+      if (!dateString) return null;
+      const targetDate = new Date(dateString);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24));
+    }
+
+    function formatDDay(dDay) {
+      if (dDay === null) return '-';
+      if (dDay === 0) return 'D-Day';
+      if (dDay > 0) return `D-${dDay}`;
+      return `D+${Math.abs(dDay)} (만료)`;
+    }
+
+    // 차량 목록 불러오기
     async function loadVehicles() {
-      const snapshot = await getDocs(collection(db, 'vehicles'));
-      const tbody = document.getElementById('vehicle-list');
-      tbody.innerHTML = ''; // 기존 목록 비우기
+      try {
+        const { data: vehicles, error } = await supabase.from('vehicles').select('*').order('created_at', { ascending: false });
+        
+        // 테이블이 없거나 키가 잘못된 경우의 에러 처리
+        if (error) throw error;
+
+        const listDiv = document.getElementById('vehicle-list');
+        listDiv.innerHTML = '';
+        let alerts = [];
+
+        for (const v of vehicles) {
+          const insDDay = getDDay(v.insurance_exp);
+          const inspDDay = getDDay(v.inspection_exp);
+
+          if (insDDay !== null && insDDay >= 0 && insDDay <= 10) alerts.push(`${v.plate} (${v.model})의 <b>보험 만기</b>가 ${insDDay === 0 ? '오늘입니다' : insDDay + '일 남았습니다'}.`);
+          if (inspDDay !== null && inspDDay >= 0 && inspDDay <= 10) alerts.push(`${v.plate} (${v.model})의 <b>자동차검사 기한</b>이 ${inspDDay === 0 ? '오늘입니다' : inspDDay + '일 남았습니다'}.`);
+
+          const insClass = (insDDay !== null && insDDay <= 10) ? 'd-day-alert' : '';
+          const inspClass = (inspDDay !== null && inspDDay <= 10) ? 'd-day-alert' : '';
+
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = `
+            <h2>${v.plate} <span style="font-size:0.9rem; color:#666;">(${v.model} / ${v.year} / ${v.color})</span></h2>
+            <div class="info-grid">
+              <div><strong>보험사:</strong> ${v.insurance_co || '-'}</div>
+              <div><strong>보험 만기:</strong> <span class="${insClass}">${v.insurance_exp || '-'} (${formatDDay(insDDay)})</span></div>
+              <div style="grid-column: 1 / -1;"><strong>자동차검사:</strong> <span class="${inspClass}">${v.inspection_exp || '-'} (${formatDDay(inspDDay)})</span></div>
+            </div>
+            
+            <div class="thread-section">
+              <strong>특이사항 이력</strong>
+              <div id="threads-${v.id}" class="thread-list">로딩중...</div>
+              <div class="thread-input-group">
+                <textarea id="note-text-${v.id}" rows="2" placeholder="정비 내역 등을 기록하세요..."></textarea>
+                <input type="file" id="note-file-${v.id}" accept="image/*">
+                <button onclick="addNote('${v.id}')">기록 저장</button>
+              </div>
+            </div>
+            <button class="danger" style="width:100%; margin-top:15px;" onclick="deleteVehicle('${v.id}')">매각/삭제 처리</button>
+          `;
+          listDiv.appendChild(card);
+          loadNotes(v.id);
+        }
+
+        if (alerts.length > 0) {
+          document.getElementById('alertMessages').innerHTML = alerts.join('<br><br>');
+          openModal('dDayAlertModal');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('데이터베이스 연결 실패. URL/Key가 정확한지, 혹은 DB 테이블이 생성되었는지 확인해주세요.');
+        disconnectSupabase();
+      }
+    }
+
+    // 차량 등록
+    async function addVehicle() {
+      const v = {
+        plate: document.getElementById('vPlate').value,
+        model: document.getElementById('vModel').value,
+        year: document.getElementById('vYear').value,
+        color: document.getElementById('vColor').value,
+        insurance_co: document.getElementById('vInsuranceCo').value,
+        insurance_exp: document.getElementById('vInsuranceExp').value,
+        inspection_exp: document.getElementById('vInspectionExp').value
+      };
       
-      if(snapshot.empty) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-slate-500">등록된 차량이 없습니다.</td></tr>';
+      if(!v.plate || !v.model) return alert('차량번호와 차종은 필수입니다.');
+
+      const { error } = await supabase.from('vehicles').insert([v]);
+      if (error) alert('등록 실패! 콘솔을 확인해주세요.');
+      else {
+        closeModal('addVehicleModal');
+        document.querySelectorAll('#addVehicleModal input').forEach(el => el.value = '');
+        loadVehicles();
+      }
+    }
+
+    // 차량 삭제
+    async function deleteVehicle(id) {
+      if (!confirm('차량 정보를 삭제하시겠습니까? 관련된 특이사항 스레드도 모두 삭제됩니다.')) return;
+      const { error } = await supabase.from('vehicles').delete().eq('id', id);
+      if (!error) loadVehicles();
+    }
+
+    // 스레드 불러오기
+    async function loadNotes(vehicleId) {
+      const { data: notes, error } = await supabase.from('vehicle_notes').select('*').eq('vehicle_id', vehicleId).order('created_at', { ascending: true });
+      const container = document.getElementById(`threads-${vehicleId}`);
+      if (error) { container.innerHTML = '불러오기 실패'; return; }
+      
+      if(notes.length === 0) {
+        container.innerHTML = '<div style="color:#aaa; font-size:0.8rem;">기록된 특이사항이 없습니다.</div>';
         return;
       }
 
-      snapshot.forEach(docSnap => {
-        const data = docSnap.data();
-        const tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-50 transition";
-        
-        // 테이블 내용 (특이사항 input창 포함)
-        tr.innerHTML = `
-          <td class="p-3 border">${data.number || '-'}</td>
-          <td class="p-3 border">${data.type || '-'}</td>
-          <td class="p-3 border">${data.year || '-'}</td>
-          <td class="p-3 border text-xs text-slate-500">${data.vin || '-'}</td>
-          <td class="p-3 border">${data.insuranceDate || '-'}</td>
-          <td class="p-3 border bg-blue-50/30">
-            <input type="text" value="${data.note || ''}" 
-                   placeholder="특이사항 입력 (엔터시 저장)" 
-                   class="w-full p-2 border border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none bg-transparent transition rounded" 
-                   onchange="updateNote('${docSnap.id}', this.value)">
-          </td>
-          <td class="p-3 border text-center">
-             <button onclick="deleteVehicle('${docSnap.id}')" class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200">삭제</button>
-          </td>
-        `;
-        tbody.appendChild(tr);
-      });
+      container.innerHTML = notes.map(n => `
+        <div class="thread-item">
+          <div>${n.content ? n.content.replace(/\n/g, '<br>') : ''}</div>
+          ${n.image_url ? `<img src="${n.image_url}" alt="첨부 이미지">` : ''}
+          <div style="font-size:0.7rem; color:#888; text-align:right; margin-top:5px;">${new Date(n.created_at).toLocaleString()}</div>
+        </div>
+      `).join('');
+      container.scrollTop = container.scrollHeight;
     }
 
-    // 전역 함수로 등록 (html 속성인 onclick, onchange에서 호출하기 위함)
-    
-    // 1. 특이사항 업데이트 기능
-    window.updateNote = async (id, newNote) => {
-      try {
-        await updateDoc(doc(db, 'vehicles', id), { note: newNote });
-        // 저장 성공 시 우측 하단 등에 작은 알림을 띄울 수도 있지만, 번거롭지 않게 alert은 뺐습니다.
-      } catch (e) {
-        alert('저장 실패: ' + e.message);
-      }
-    };
+    // 스레드 추가 및 이미지 업로드
+    async function addNote(vehicleId) {
+      const content = document.getElementById(`note-text-${vehicleId}`).value;
+      const fileInput = document.getElementById(`note-file-${vehicleId}`);
+      const file = fileInput.files[0];
+      
+      if (!content && !file) return alert('내용을 입력하거나 이미지를 첨부해주세요.');
+      
+      const btn = event.target;
+      btn.innerText = '업로드 중...';
+      btn.disabled = true;
 
-    // 2. 차량 삭제 기능 (보너스 추가)
-    window.deleteVehicle = async (id) => {
-      if(confirm('정말 이 차량 데이터를 삭제하시겠습니까?')) {
-        await deleteDoc(doc(db, 'vehicles', id));
-        loadVehicles(); // 삭제 후 새로고침
+      let imageUrl = null;
+      if (file) {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `notes/${fileName}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage.from('vehicle-images').upload(filePath, file);
+        if (uploadError) { alert('이미지 업로드 실패. Storage 버킷 설정 및 권한을 확인하세요.'); btn.innerText = '기록 저장'; btn.disabled = false; return; }
+        
+        const { data: publicUrlData } = supabase.storage.from('vehicle-images').getPublicUrl(filePath);
+        imageUrl = publicUrlData.publicUrl;
+      }
+
+      const { error } = await supabase.from('vehicle_notes').insert([{ vehicle_id: vehicleId, content: content, image_url: imageUrl }]);
+      
+      btn.innerText = '기록 저장';
+      btn.disabled = false;
+
+      if (error) {
+        alert('기록 저장 중 오류가 발생했습니다.');
+      } else {
+        document.getElementById(`note-text-${vehicleId}`).value = '';
+        fileInput.value = '';
+        loadNotes(vehicleId);
       }
     }
   </script>
